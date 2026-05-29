@@ -16,13 +16,36 @@ export default function Login() {
         const token = searchParams.get('token');
         if (token) {
             localStorage.setItem('access_token', token);
-            window.location.href = '/';
+            const userParam = searchParams.get('user');
+            if (userParam) {
+                try { localStorage.setItem('user', decodeURIComponent(userParam)); } catch {}
+            }
+            if (window.opener) {
+                window.opener.postMessage({ type: 'GOOGLE_LOGIN', token, user: userParam }, '*');
+                window.close();
+            } else {
+                window.location.href = '/';
+            }
         }
         const errorParam = searchParams.get('error');
         if (errorParam === 'google_failed') {
             setError('Google login failed. Please try again.');
         }
     }, [searchParams]);
+
+    useEffect(() => {
+        const handleGoogleMessage = (e) => {
+            if (e.data?.type === 'GOOGLE_LOGIN' && e.data?.token) {
+                localStorage.setItem('access_token', e.data.token);
+                if (e.data?.user) {
+                    try { localStorage.setItem('user', decodeURIComponent(e.data.user)); } catch {}
+                }
+                window.location.reload();
+            }
+        };
+        window.addEventListener('message', handleGoogleMessage);
+        return () => window.removeEventListener('message', handleGoogleMessage);
+    }, []);
 
     const handleManualLogin = async (e) => {
         e.preventDefault();
@@ -61,7 +84,8 @@ export default function Login() {
     };
 
     const handleGoogleLogin = () => {
-        window.location.href = `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/auth/google`;
+        const url = `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/auth/google`;
+        window.open(url, 'google-login', 'width=600,height=700,menubar=no,toolbar=no,location=yes,status=yes');
     };
 
     const handleMockLogin = async (userId) => {

@@ -23,9 +23,10 @@ router.get('/google/callback',
         failureRedirect: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/login?error=google_failed`,
     }),
     (req, res) => {
-        const { token } = req.user;
+        const { token, user } = req.user;
+        const userEncoded = encodeURIComponent(JSON.stringify(user));
         res.redirect(
-            `${process.env.FRONTEND_URL || 'http://localhost:5173'}/login?token=${token}`
+            `${process.env.FRONTEND_URL || 'http://localhost:5173'}/login?token=${token}&user=${userEncoded}`
         );
     }
 );

@@ -38,7 +38,8 @@ passport.use(new GoogleStrategy({
             { expiresIn: '7d' }
         );
 
-        return done(null, { user, token });
+        const cleanUser = user.toObject ? { id: user._id, name: user.name, email: user.email, role: user.role, avatar: user.avatar } : user;
+        return done(null, { user: cleanUser, token });
     } catch (err) {
         return done(err, null);
     }
