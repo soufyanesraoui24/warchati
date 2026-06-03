@@ -44,11 +44,14 @@ export function Sidebar({ isOpen, onClose }) { // props added
                     : (isRTL ? "translate-x-full" : "-translate-x-full")
             )}>
                 <div className="p-6 border-b border-border flex justify-between items-center">
-                    <div>
-                        <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                            {t('brandName')}
-                        </h1>
-                        <p className="text-sm text-muted-foreground">{t('brandSubtitle')}</p>
+                    <div className="flex items-center gap-3">
+                        <img src="/imgs/ai_social_mind.png" alt="ai-SocilaMind" className="h-10 w-10 rounded-lg object-cover" />
+                        <div>
+                            <h1 className="text-lg font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                                {t('brandName')}
+                            </h1>
+                            <p className="text-xs text-muted-foreground">{t('brandSubtitle')}</p>
+                        </div>
                     </div>
                     {/* Close Button for Mobile */}
                     <button onClick={onClose} className="md:hidden text-muted-foreground hover:text-foreground">

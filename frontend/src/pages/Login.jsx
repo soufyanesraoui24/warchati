@@ -104,6 +104,7 @@ export default function Login() {
         <div className="min-h-screen bg-background flex items-center justify-center p-4">
             <div className="max-w-md w-full space-y-6">
                 <div className="text-center">
+                    <img src="/imgs/ai_social_mind.png" alt="ai-SocilaMind" className="h-16 mx-auto mb-2" />
                     <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent mb-2">
                         ai-SocilaMind
                     </h1>
