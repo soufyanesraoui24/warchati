@@ -105,7 +105,7 @@ export default function Login() {
             <div className="max-w-md w-full space-y-6">
                 <div className="text-center">
                     <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent mb-2">
-                        Warchati
+                        ai-SocilaMind
                     </h1>
                     <p className="text-muted-foreground">Smart Messaging Platform</p>
                 </div>

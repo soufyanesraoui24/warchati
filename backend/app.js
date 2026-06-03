@@ -42,7 +42,7 @@ app.use('/api/auth/', authLimiter);
 
 // Health check
 app.get('/', (req, res) => {
-    res.json({ message: 'Warchati API is running', status: 'OK', ai: 'Local (Ollama)' });
+    res.json({ message: 'ai-SocilaMind API is running', status: 'OK', ai: 'Local (Ollama)' });
 });
 app.get('/health', async (req, res) => {
     try {

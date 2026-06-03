@@ -32,11 +32,11 @@ exports.testChannel = async (req, res) => {
 
     try {
         if (channelKey === 'facebook') {
-            const result = await facebookMessengerService.sendMessage('test', '🟢 Test connection from Warchati');
+            const result = await facebookMessengerService.sendMessage('test', '🟢 Test connection from ai-SocilaMind');
             return res.json({ success: result.success, message: result.success ? 'Connected' : result.error });
         }
         if (channelKey === 'whatsapp') {
-            const result = await whatsappService.sendMessage('test', '🟢 Test connection from Warchati');
+            const result = await whatsappService.sendMessage('test', '🟢 Test connection from ai-SocilaMind');
             return res.json({ success: result.success, message: result.success ? 'Connected' : result.error });
         }
         res.status(400).json({ success: false, message: 'Unknown channel' });

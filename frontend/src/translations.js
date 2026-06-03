@@ -1,8 +1,8 @@
 export const translations = {
     ar: {
         // General
-        brandName: "تاجر تك",
-        brandSubtitle: "نظام إدارة المبيعات",
+        brandName: "ai-SocilaMind",
+        brandSubtitle: "منصة التواصل الذكية",
         welcome: "مرحباً",
         logout: "خروج",
         login: "دخول",
@@ -154,7 +154,7 @@ export const translations = {
     },
     en: {
         // General
-        brandName: "TajirTech",
+        brandName: "ai-SocilaMind",
         brandSubtitle: "Sales Management System",
         welcome: "Welcome",
         logout: "Logout",
@@ -307,7 +307,7 @@ export const translations = {
     },
     fr: {
         // General
-        brandName: "TajirTech",
+        brandName: "ai-SocilaMind",
         brandSubtitle: "Système de Gestion des Ventes",
         welcome: "Bienvenue",
         logout: "Déconnexion",
