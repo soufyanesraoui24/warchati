@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Mail, Lock, Chrome, Loader2 } from 'lucide-react';
+import { Mail, Lock, Chrome, Loader2, UserCircle } from 'lucide-react';
 
 export default function Login() {
     const [searchParams] = useSearchParams();
