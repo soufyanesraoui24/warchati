@@ -1,4 +1,4 @@
-import { LayoutDashboard, MessageSquare, Package, Bot, BarChart3, Radio, Smartphone, MessageCircle } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, Package, Bot, BarChart3, Radio, Smartphone, MessageCircle, Users } from 'lucide-react';
 import { ROLES } from './context/AuthContext';
 
 export const NAV_ITEMS = [
@@ -43,6 +43,13 @@ export const NAV_ITEMS = [
         icon: Radio,
         category: 'settings',
         allowedRoles: [ROLES.OWNER, ROLES.MANAGER, ROLES.ADMIN]
+    },
+    {
+        label: 'فريق العمل',
+        path: '/users',
+        icon: Users,
+        category: 'settings',
+        allowedRoles: [ROLES.OWNER, ROLES.ADMIN]
     },
     {
         label: 'محاكاة الزبون',

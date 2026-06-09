@@ -2,11 +2,12 @@ const express = require('express');
 const router = express.Router();
 const { register, login, getMe, mockLogin } = require('../controllers/authController');
 const auth = require('../middleware/authMiddleware');
+const role = require('../middleware/roleMiddleware');
 const validate = require('../middleware/validate');
 const { authSchema } = require('../utils/validators');
 const passport = require('../config/passport');
 
-router.post('/register', validate(authSchema), register);
+router.post('/register', auth, role('admin', 'owner'), validate(authSchema), register);
 router.post('/login', validate(authSchema), login);
 router.post('/mock-login', mockLogin);
 router.get('/me', auth, getMe);

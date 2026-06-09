@@ -11,6 +11,7 @@ import Analytics from './pages/Analytics';
 import Channels from './pages/Channels';
 import CustomerSimulator from './pages/CustomerSimulator';
 import QATemplates from './pages/QATemplates';
+import Users from './pages/Users';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { SocketProvider } from './context/SocketContext';
@@ -44,6 +45,7 @@ function AppContent() {
                 <Route path="/channels" element={<Channels />} />
                 <Route path="/simulator" element={<CustomerSimulator />} />
                 <Route path="/templates" element={<QATemplates />} />
+                <Route path="/users" element={<Users />} />
               </Routes>
             </AppLayout>
           </ProtectedRoute>

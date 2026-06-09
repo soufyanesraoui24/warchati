@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { UserCircle, Mail, Lock, User, Chrome, Loader2 } from 'lucide-react';
+import { Mail, Lock, Chrome, Loader2 } from 'lucide-react';
 
 export default function Login() {
     const [searchParams] = useSearchParams();
-    const { login: authLogin, mockLogin: authMockLogin, register: authRegister, MOCK_USERS } = useAuth();
+    const { login: authLogin, mockLogin: authMockLogin, MOCK_USERS } = useAuth();
     const navigate = useNavigate();
-    const [tab, setTab] = useState('login');
-    const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '' });
+    const [form, setForm] = useState({ email: '', password: '' });
     const [error, setError] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
@@ -61,28 +60,6 @@ export default function Login() {
         }
     };
 
-    const handleRegister = async (e) => {
-        e.preventDefault();
-        setError('');
-        if (form.password !== form.confirmPassword) {
-            setError('Passwords do not match');
-            return;
-        }
-        if (form.password.length < 6) {
-            setError('Password must be at least 6 characters');
-            return;
-        }
-        setSubmitting(true);
-        try {
-            const result = await authRegister({ name: form.name, email: form.email, password: form.password });
-            if (result) navigate('/');
-        } catch (err) {
-            setError(err?.response?.data?.message || err?.message || 'Registration failed');
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
     const handleGoogleLogin = () => {
         const url = `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/auth/google`;
         window.open(url, 'google-login', 'width=600,height=700,menubar=no,toolbar=no,location=yes,status=yes');
@@ -97,8 +74,6 @@ export default function Login() {
             navigate('/');
         }
     };
-
-    const updateField = (field) => (e) => setForm(prev => ({ ...prev, [field]: e.target.value }));
 
     return (
         <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -117,21 +92,7 @@ export default function Login() {
                     </div>
                 )}
 
-                {/* Login / Register Tabs */}
-                <div className="flex bg-card border border-border rounded-xl p-1">
-                    <button
-                        onClick={() => setTab('login')}
-                        className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${tab === 'login' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-                    >
-                        Sign In
-                    </button>
-                    <button
-                        onClick={() => setTab('register')}
-                        className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${tab === 'register' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-                    >
-                        Create Account
-                    </button>
-                </div>
+                <p className="text-center text-muted-foreground text-sm">تسجيل الدخول للوحة التحكم</p>
 
                 {/* Login Form */}
                 {tab === 'login' && (
@@ -139,7 +100,7 @@ export default function Login() {
                         <div className="relative">
                             <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                             <input
-                                type="email" required value={form.email} onChange={updateField('email')}
+                                type="email" required value={form.email} onChange={e => setForm({...form, email: e.target.value})}
                                 placeholder="Email"
                                 className="w-full bg-background border border-border rounded-xl pr-10 pl-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                             />
@@ -147,7 +108,7 @@ export default function Login() {
                         <div className="relative">
                             <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                             <input
-                                type="password" required value={form.password} onChange={updateField('password')}
+                                type="password" required value={form.password} onChange={e => setForm({...form, password: e.target.value})}
                                 placeholder="Password"
                                 className="w-full bg-background border border-border rounded-xl pr-10 pl-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                             />
@@ -162,50 +123,7 @@ export default function Login() {
                     </form>
                 )}
 
-                {/* Register Form */}
-                {tab === 'register' && (
-                    <form onSubmit={handleRegister} className="space-y-4 bg-card border border-border rounded-2xl p-6 shadow-sm">
-                        <div className="relative">
-                            <User className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                            <input
-                                type="text" required value={form.name} onChange={updateField('name')}
-                                placeholder="Full Name"
-                                className="w-full bg-background border border-border rounded-xl pr-10 pl-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                            />
-                        </div>
-                        <div className="relative">
-                            <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                            <input
-                                type="email" required value={form.email} onChange={updateField('email')}
-                                placeholder="Email"
-                                className="w-full bg-background border border-border rounded-xl pr-10 pl-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                            />
-                        </div>
-                        <div className="relative">
-                            <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                            <input
-                                type="password" required value={form.password} onChange={updateField('password')}
-                                placeholder="Password (min 6 characters)"
-                                className="w-full bg-background border border-border rounded-xl pr-10 pl-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                            />
-                        </div>
-                        <div className="relative">
-                            <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                            <input
-                                type="password" required value={form.confirmPassword} onChange={updateField('confirmPassword')}
-                                placeholder="Confirm Password"
-                                className="w-full bg-background border border-border rounded-xl pr-10 pl-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                            />
-                        </div>
-                        <button
-                            type="submit" disabled={submitting}
-                            className="w-full bg-primary text-primary-foreground rounded-xl py-3 font-bold text-sm hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
-                        >
-                            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                            Create Account
-                        </button>
-                    </form>
-                )}
+
 
                 {/* Divider */}
                 <div className="flex items-center gap-3">
