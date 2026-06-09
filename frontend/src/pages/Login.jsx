@@ -95,8 +95,7 @@ export default function Login() {
                 <p className="text-center text-muted-foreground text-sm">تسجيل الدخول للوحة التحكم</p>
 
                 {/* Login Form */}
-                {tab === 'login' && (
-                    <form onSubmit={handleManualLogin} className="space-y-4 bg-card border border-border rounded-2xl p-6 shadow-sm">
+                <form onSubmit={handleManualLogin} className="space-y-4 bg-card border border-border rounded-2xl p-6 shadow-sm">
                         <div className="relative">
                             <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                             <input
@@ -121,7 +120,6 @@ export default function Login() {
                             Sign In
                         </button>
                     </form>
-                )}
 
 
 
