@@ -35,7 +35,7 @@ const apiLimiter = rateLimit({
 });
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 10,
+    max: 50,
     message: { success: false, message: 'محاولات دخول كثيرة، حاول بعد 15 دقيقة' }
 });
 app.use('/api/', apiLimiter);
