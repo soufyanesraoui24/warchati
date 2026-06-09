@@ -50,8 +50,14 @@ export function Header({ onMenuClick }) {
                         <p className="text-sm font-bold text-white leading-none">{user?.username || user?.name}</p>
                         <p className="text-[10px] text-slate-400 font-medium mt-1 uppercase tracking-wider">{user?.role}</p>
                     </div>
-                    <div className="w-9 h-9 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-bold border-2 border-slate-700 shadow-sm">
-                        {user?.avatar || user?.name?.charAt(0)}
+                    <div className="w-9 h-9 rounded-full border-2 border-slate-700 shadow-sm overflow-hidden">
+                        {user?.avatar?.startsWith('http') ? (
+                            <img src={user.avatar} alt="" className="w-full h-full object-cover" onError={(e) => { e.target.style.display='none'; e.target.parentElement.className='w-9 h-9 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-bold border-2 border-slate-700 shadow-sm text-sm' }} />
+                        ) : (
+                            <div className="w-full h-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm">
+                                {user?.name?.charAt(0) || 'U'}
+                            </div>
+                        )}
                     </div>
 
                     <button
