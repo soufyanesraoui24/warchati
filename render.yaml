@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: ai-socialmind
+    env: node
+    region: frankfurt
+    branch: master
+    buildCommand: cd backend && npm install && cd ../frontend && npm install && npm run build
+    startCommand: cd backend && node server.js
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: OLLAMA_URL
+        value: http://localhost:11434
+      - key: OLLAMA_MODEL
+        value: qwen2.5:7b
+      - key: OLLAMA_TIMEOUT_MS
+        value: '30000'
+      - key: FRONTEND_URL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_CALLBACK_URL
+        sync: false
+      - key: PAGE_ACCESS_TOKEN
+        sync: false
+      - key: VERIFY_TOKEN
+        sync: false
