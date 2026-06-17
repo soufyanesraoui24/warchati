@@ -18,6 +18,7 @@ const facebookWebhookRoutes = require('./routes/facebookWebhookRoutes');
 const whatsappWebhookRoutes = require('./routes/whatsappWebhookRoutes');
 const channelRoutes = require('./routes/channelRoutes');
 const userRoutes = require('./routes/userRoutes');
+const botSettingsRoutes = require('./routes/botSettingsRoutes');
 
 // Create express app
 const app = express();
@@ -75,6 +76,7 @@ app.use('/api/webhook/facebook', facebookWebhookRoutes);
 app.use('/api/webhook/whatsapp', whatsappWebhookRoutes);
 app.use('/api/channels', channelRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/bot-settings', botSettingsRoutes);
 
 // Error handler
 app.use(errorMiddleware);

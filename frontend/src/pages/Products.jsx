@@ -214,15 +214,36 @@ export default function Products() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">صور المنتج (روابط)</label>
+                <label className="block text-sm font-medium mb-1">صور المنتج</label>
                 <div className="flex gap-2">
                   <input
                     value={Array.isArray(formData.images) ? formData.images.join(', ') : formData.images || ''}
                     onChange={(e) => setFormData({ ...formData, images: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
                     className="flex-1 bg-background border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 ltr text-left"
-                    placeholder="https://example.com/image1.jpg, https://example.com/image2.jpg"
+                    placeholder="https://example.com/image1.jpg"
                     dir="ltr"
                   />
+                  <label className="shrink-0 flex items-center gap-1.5 bg-secondary hover:bg-secondary/80 text-secondary-foreground px-3 py-2.5 rounded-xl cursor-pointer transition-colors text-sm font-medium">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          const dataUrl = ev.target?.result;
+                          if (typeof dataUrl === 'string') {
+                            setFormData((prev) => ({ ...prev, images: [...prev.images, dataUrl] }));
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                        e.target.value = '';
+                      }}
+                    />
+                    رفع صورة
+                  </label>
                 </div>
                 {Array.isArray(formData.images) && formData.images.length > 0 && (
                   <div className="flex gap-2 mt-2 flex-wrap">

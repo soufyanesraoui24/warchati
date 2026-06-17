@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Bot, Globe, Clock, MessageCircle, AlertTriangle, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Save, Bot, Globe, Clock, MessageCircle, AlertTriangle, ToggleLeft, ToggleRight, Timer, Send } from 'lucide-react';
 import { cn } from '../utils';
-import { getBotStatus } from '../api/aiApi';
-import client from '../api/client';
+import { getBotSettings, updateBotSettings } from '../api/botSettingsApi';
 
 const LANGUAGE_STYLES = [
   { value: 'darija', label: 'الدارجة الجزائرية' },
@@ -13,21 +12,25 @@ const LANGUAGE_STYLES = [
 export default function BotSettings() {
   const [settings, setSettings] = useState({
     botName: 'وردة',
-    autoReply: true,
+    autoReplyEnabled: true,
     languageStyle: 'darija',
-    requireApproval: false,
-    workingHoursStart: '09:00',
-    workingHoursEnd: '18:00',
+    requireApprovalBeforeSend: false,
+    workingHours: { start: '09:00', end: '18:00', timezone: 'Africa/Algiers' },
     handoffOnNegative: true,
-    welcomeMessage: 'السلام عليكم! 🌸 أنا وردة، المساعد الذكي. كيف أقدر نعاونكم؟',
-    afterHoursMessage: 'نعتذروا منكم، وقت العمل من 9 صباحاً إلى 6 مساءً. سنعود لكم في أقرب وقت.',
+    welcomeMessage: 'السلام عليكم! أنا وردة، المساعدة الذكية للمتجر. كيف نقدر نخدمك؟',
+    afterHoursMessage: 'السلام عليكم! وقت العمل الرسمي من 09:00 إلى 18:00. غدوا نردو عليك في أقرب وقت.',
+    fallbackMessage: 'عفواً، ما فهمتش الرسالة. تقدر تعيد صياغتها؟',
+    replyDelay: 2,
+    followUpEnabled: false,
+    followUpDelay: 30,
+    followUpMessage: 'مرحباً، مازال مهتم بالمنتج؟ العرض لسة متوفر. نحن هنا لمساعدتك!',
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getBotStatus()
+    getBotSettings()
       .then((data) => {
         if (data) {
           setSettings((prev) => ({ ...prev, ...data }));
@@ -41,7 +44,7 @@ export default function BotSettings() {
     setSaving(true);
     setSaved(false);
     try {
-      await client.put('/ai/bot-settings', settings);
+      await updateBotSettings(settings);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
@@ -63,6 +66,22 @@ export default function BotSettings() {
     );
   }
 
+  const Toggle = ({ value, onChange, label, desc, color = 'primary' }) => (
+    <div className="flex items-center justify-between p-4 bg-secondary/30 rounded-xl">
+      <div>
+        <h4 className="font-bold text-sm">{label}</h4>
+        <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
+      </div>
+      <button onClick={() => onChange(!value)}>
+        {value ? (
+          <ToggleRight className={`w-8 h-8 text-${color}`} />
+        ) : (
+          <ToggleLeft className="w-8 h-8 text-muted-foreground" />
+        )}
+      </button>
+    </div>
+  );
+
   return (
     <div className="max-w-3xl mx-auto space-y-6" dir="rtl">
       <div className="flex items-center justify-between">
@@ -71,7 +90,7 @@ export default function BotSettings() {
             <Bot className="w-7 h-7 text-primary" />
             إعدادات البوت
           </h2>
-          <p className="text-sm text-muted-foreground mt-1">تخصيص إعدادات المساعد الذكي وردة</p>
+          <p className="text-sm text-muted-foreground mt-1">تخصيص إعدادات المساعد الذكي</p>
         </div>
         <button
           onClick={handleSave}
@@ -99,19 +118,27 @@ export default function BotSettings() {
           />
         </div>
 
-        <div className="flex items-center justify-between p-4 bg-secondary/30 rounded-xl">
-          <div>
-            <h4 className="font-bold text-sm">الرد التلقائي</h4>
-            <p className="text-xs text-muted-foreground mt-0.5">تفعيل الرد التلقائي على رسائل العملاء</p>
-          </div>
-          <button onClick={() => update('autoReply', !settings.autoReply)}>
-            {settings.autoReply ? (
-              <ToggleRight className="w-8 h-8 text-primary" />
-            ) : (
-              <ToggleLeft className="w-8 h-8 text-muted-foreground" />
-            )}
-          </button>
-        </div>
+        <Toggle
+          value={settings.autoReplyEnabled}
+          onChange={(v) => update('autoReplyEnabled', v)}
+          label="الرد التلقائي"
+          desc="تفعيل الرد التلقائي على رسائل العملاء"
+        />
+
+        <Toggle
+          value={settings.requireApprovalBeforeSend}
+          onChange={(v) => update('requireApprovalBeforeSend', v)}
+          label="طلب الموافقة قبل الإرسال"
+          desc="الموافقة اليدوية مطلوبة قبل إرسال رد البوت"
+          color="amber-500"
+        />
+
+        <Toggle
+          value={settings.handoffOnNegative}
+          onChange={(v) => update('handoffOnNegative', v)}
+          label="تحويل تلقائي عند المشاعر السلبية"
+          desc="تحويل المحادثة لموظف بشري عند اكتشاف مشاعر سلبية"
+        />
 
         <div>
           <label className="block text-sm font-medium mb-1.5">لغة الردود</label>
@@ -133,18 +160,22 @@ export default function BotSettings() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between p-4 bg-secondary/30 rounded-xl">
-          <div>
-            <h4 className="font-bold text-sm">طلب الموافقة قبل الإرسال</h4>
-            <p className="text-xs text-muted-foreground mt-0.5">الموافقة اليدوية مطلوبة قبل إرسال رد البوت</p>
+        <div>
+          <label className="block text-sm font-medium mb-1.5">
+            <Timer className="w-4 h-4 inline ml-1" />
+            تأخير الرد (بالثواني)
+          </label>
+          <input
+            type="range"
+            min="0" max="60" step="1"
+            value={settings.replyDelay}
+            onChange={(e) => update('replyDelay', parseInt(e.target.value))}
+            className="w-full"
+          />
+          <div className="flex justify-between text-xs text-muted-foreground mt-1">
+            <span>{settings.replyDelay} ثانية</span>
+            <span>0 - 60 ثانية</span>
           </div>
-          <button onClick={() => update('requireApproval', !settings.requireApproval)}>
-            {settings.requireApproval ? (
-              <ToggleRight className="w-8 h-8 text-amber-500" />
-            ) : (
-              <ToggleLeft className="w-8 h-8 text-muted-foreground" />
-            )}
-          </button>
         </div>
 
         <div>
@@ -154,8 +185,8 @@ export default function BotSettings() {
               <span className="text-xs text-muted-foreground">بداية</span>
               <input
                 type="time"
-                value={settings.workingHoursStart}
-                onChange={(e) => update('workingHoursStart', e.target.value)}
+                value={settings.workingHours?.start || '09:00'}
+                onChange={(e) => update('workingHours', { ...settings.workingHours, start: e.target.value })}
                 className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 mt-1"
               />
             </div>
@@ -164,26 +195,12 @@ export default function BotSettings() {
               <span className="text-xs text-muted-foreground">نهاية</span>
               <input
                 type="time"
-                value={settings.workingHoursEnd}
-                onChange={(e) => update('workingHoursEnd', e.target.value)}
+                value={settings.workingHours?.end || '18:00'}
+                onChange={(e) => update('workingHours', { ...settings.workingHours, end: e.target.value })}
                 className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 mt-1"
               />
             </div>
           </div>
-        </div>
-
-        <div className="flex items-center justify-between p-4 bg-secondary/30 rounded-xl">
-          <div>
-            <h4 className="font-bold text-sm">تحويل تلقائي عند المشاعر السلبية</h4>
-            <p className="text-xs text-muted-foreground mt-0.5">تحويل المحادثة لموظف بشري عند اكتشاف مشاعر سلبية</p>
-          </div>
-          <button onClick={() => update('handoffOnNegative', !settings.handoffOnNegative)}>
-            {settings.handoffOnNegative ? (
-              <ToggleRight className="w-8 h-8 text-primary" />
-            ) : (
-              <ToggleLeft className="w-8 h-8 text-muted-foreground" />
-            )}
-          </button>
         </div>
 
         <div>
@@ -205,6 +222,70 @@ export default function BotSettings() {
             rows={3}
           />
         </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1.5">
+            <MessageCircle className="w-4 h-4 inline ml-1" />
+            رسالة عدم الفهم (fallback)
+          </label>
+          <textarea
+            value={settings.fallbackMessage}
+            onChange={(e) => update('fallbackMessage', e.target.value)}
+            className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
+            rows={3}
+          />
+          <p className="text-xs text-muted-foreground mt-1">تُرسل عندما لا يفهم البوت رسالة الزبون</p>
+        </div>
+      </div>
+
+      <div className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-6">
+        <h3 className="text-lg font-bold flex items-center gap-2">
+          <Send className="w-5 h-5 text-primary" />
+          إعدادات المتابعة التلقائية
+        </h3>
+        <p className="text-sm text-muted-foreground">
+          إرسال رسالة متابعة تلقائية للزبون إذا لم يرد بعد مدة
+        </p>
+
+        <Toggle
+          value={settings.followUpEnabled}
+          onChange={(v) => update('followUpEnabled', v)}
+          label="تفعيل المتابعة التلقائية"
+          desc="إرسال رسالة متابعة بعد مدة من عدم الرد"
+        />
+
+        {settings.followUpEnabled && (
+          <>
+            <div>
+              <label className="block text-sm font-medium mb-1.5">
+                <Timer className="w-4 h-4 inline ml-1" />
+                مدة الانتظار قبل المتابعة (بالدقائق)
+              </label>
+              <input
+                type="range"
+                min="1" max="1440" step="5"
+                value={settings.followUpDelay}
+                onChange={(e) => update('followUpDelay', parseInt(e.target.value))}
+                className="w-full"
+              />
+              <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                <span>{settings.followUpDelay} دقيقة</span>
+                <span>1 دقيقة - 24 ساعة</span>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1.5">نص رسالة المتابعة</label>
+              <textarea
+                value={settings.followUpMessage}
+                onChange={(e) => update('followUpMessage', e.target.value)}
+                className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
+                rows={3}
+              />
+              <p className="text-xs text-muted-foreground mt-1">تُرسل للزبون إذا لم يرد بعد المدة المحددة</p>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

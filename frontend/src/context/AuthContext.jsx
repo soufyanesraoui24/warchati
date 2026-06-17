@@ -40,7 +40,15 @@ export function AuthProvider({ children }) {
             }
 
             if (mockUser) {
-                setUser(JSON.parse(mockUser));
+                const parsed = JSON.parse(mockUser);
+                try {
+                    const data = await apiMockLogin(parsed.id);
+                    localStorage.setItem('access_token', data.token);
+                    localStorage.removeItem('warchati_user');
+                    setUser(data.user);
+                } catch {
+                    setUser(parsed);
+                }
             }
 
             setLoading(false);

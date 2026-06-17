@@ -68,10 +68,6 @@ exports.simulateMessage = async (req, res) => {
         conversation.aiActive = true;
         await conversation.save();
 
-        // التأكد من أن AI شغال للمحاكاة
-        conversation.aiActive = true;
-        await conversation.save();
-
         // تشغيل خط الأنابيب الذكي
         const aiResult = await aiPipelineService.processMessage(text.trim(), conversation._id);
 

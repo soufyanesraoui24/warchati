@@ -1,312 +1,326 @@
-/**
- * aiPipelineService.js  (v2 - Local AI Edition)
- * ─────────────────────────────────────────────
- * تم حذف OpenAI بالكامل.
- * النظام يعمل الآن محلياً عبر:
- *   - Ollama (localAIService.js)     → توليد الردود
- *   - messageAnalyzer.js             → تحليل النية والمشاعر
- *   - MongoDB                        → جلب المنتجات الحقيقية + التاريخ
- *   - TemplateResponse               → ردود جاهزة للنوايا الشائعة
- */
-
-const Conversation      = require('../models/Conversation');
-const Message           = require('../models/Message');
-const TemplateResponse  = require('../models/TemplateResponse');
-const Product           = require('../models/Product');
-
+const Conversation = require('../models/Conversation');
+const Message = require('../models/Message');
+const TemplateResponse = require('../models/TemplateResponse');
+const Product = require('../models/Product');
+const BotSettings = require('../models/BotSettings');
 const { generateLocalResponse } = require('./localAIService');
-const { analyzeMessage }        = require('./messageAnalyzer');
-
-// ─── Socket.IO للإشعارات الفورية ──────────────────────────────────────────────
+const { analyzeMessage } = require('./messageAnalyzer');
 const { getIO } = require('../config/socket');
 
-// ─── شخصية وردة (System Prompt) ──────────────────────────────────────────────
-const WARDA_SYSTEM_PROMPT = `أنت "وردة"، مساعدة مبيعات لمتجر جزائري.
+const responseCache = new Map();
+const CACHE_TTL = 3600000;
 
-تعليمات صارمة:
-- ردّي بجملة أو جملتين فقط بالدارجة الجزائرية
-- لا تتعدى 20 كلمة أبداً
-- لا تستخدمي الفصحى
-- لا تستخدمي تنسيق Markdown (لا *, لا -, لا #)
-- كوني مباشرة ومفيدة
-- اختمي بسؤال للزبون`;
+function getCached(text) {
+    const key = text.trim().slice(0, 100).toLowerCase();
+    const entry = responseCache.get(key);
+    if (entry && Date.now() - entry.ts < CACHE_TTL) return entry.text;
+    return null;
+}
 
-// ─── تقليم الردود الطويلة ────────────────────────────────────────────────────
+function setCached(text, reply) {
+    const key = text.trim().slice(0, 100).toLowerCase();
+    responseCache.set(key, { text: reply, ts: Date.now() });
+}
+
+const LANG_PROMPTS = {
+    darija: 'ردّي بالدارجة الجزائرية. استخدمي كلمات محلية مثل "شنو"، "واش"، "بقداه"، "درك".',
+    fossha: 'ردّي باللغة العربية الفصحى البسيطة.',
+    mixed: 'ردّي بمزيج من الدارجة الجزائرية والعربية الفصحى.'
+};
 
 function trimResponse(text) {
     if (!text) return '';
-    // إزالة أي تنسيق Markdown
     let clean = text.replace(/[*#\-_`]/g, '');
-    // أخذ أول 25 كلمة فقط
-    const words = clean.split(/\s+/).filter(Boolean);
-    return words.slice(0, 25).join(' ');
+    let sentences = clean.split(/[.!\n]/).filter(Boolean);
+    const first = sentences[0] || clean;
+    const words = first.split(/\s+/).filter(Boolean);
+    return words.slice(0, 20).join(' ');
 }
 
-// ─── جلب سياق المنتجات من MongoDB ────────────────────────────────────────────
-
-/**
- * يبحث في قاعدة البيانات عن منتجات مرتبطة بالكلمات المفتاحية
- * @param {string[]} keywords
- * @returns {Promise<string>}
- */
 async function getProductContext(keywords) {
-    if (!keywords || keywords.length === 0) {
-        return 'لا توجد كلمات مفتاحية للبحث. يرجى ذكر اسم المنتج.';
-    }
-
+    if (!keywords || keywords.length === 0) return '';
     try {
-        // محاولة تحميل نموذج Product إن وُجد
-        let Product;
-        try {
-            Product = require('../models/Product');
-        } catch {
-            // نموذج Product غير موجود بعد - نرجع سياقاً افتراضياً
-            return `متجر وردة يوفر تشكيلة واسعة من الملابس والإكسسوارات. التوصيل لـ 58 ولاية. الدفع عند الاستلام.`;
-        }
-
         const regexPattern = keywords.join('|');
         const products = await Product.find({
             $or: [
-                { name:        { $regex: regexPattern, $options: 'i' } },
+                { name: { $regex: regexPattern, $options: 'i' } },
                 { description: { $regex: regexPattern, $options: 'i' } },
-                { category:    { $regex: regexPattern, $options: 'i' } }
+                { category: { $regex: regexPattern, $options: 'i' } }
             ]
         }).limit(5).lean();
-
-        if (!products || products.length === 0) {
-            return `لم نجد منتجاً بـ "${keywords.join(', ')}" في المخزون حالياً.`;
-        }
-
+        if (!products || products.length === 0) return '';
         return products.map(p => {
-            const lines = [`📦 المنتج: ${p.name}`];
-            if (p.price)       lines.push(`💰 السعر: ${p.price} دج`);
-            if (p.colors?.length)  lines.push(`🎨 الألوان: ${p.colors.join(', ')}`);
-            if (p.sizes?.length)   lines.push(`📏 المقاسات: ${p.sizes.join(', ')}`);
-            if (p.description) lines.push(`📝 الوصف: ${p.description}`);
-            lines.push(`✅ المخزون: ${p.stock > 0 ? 'متوفر' : 'غير متوفر'}`);
-            return lines.join('\n');
-        }).join('\n\n');
-
+            const info = [`المنتج: ${p.name}، السعر: ${p.price} دج`];
+            if (p.colors?.length) info.push(`الألوان: ${p.colors.join('، ')}`);
+            if (p.sizes?.length) info.push(`المقاسات: ${p.sizes.join('، ')}`);
+            info.push(`المخزون: ${p.stock > 0 ? 'متوفر' : 'غير متوفر'}`);
+            return info.join(' | ');
+        }).join('\n');
     } catch (error) {
-        console.error('[Pipeline] Error fetching products:', error.message);
-        return 'تعذر جلب معلومات المنتجات من قاعدة البيانات.';
+        return '';
     }
 }
 
-// ─── جلب تاريخ المحادثة ───────────────────────────────────────────────────────
+async function getAllProductsContext() {
+    try {
+        const products = await Product.find({ isActive: true }).limit(10).lean();
+        if (!products || products.length === 0) return '';
+        return products.map(p =>
+            `${p.name}: ${p.price} دج${p.stock > 0 ? ' (متوفر)' : ' (غير متوفر)'}`
+        ).join(' | ');
+    } catch {
+        return '';
+    }
+}
 
-/**
- * يجلب آخر N رسائل من المحادثة لإضافتها للسياق
- * @param {string} conversationId
- * @param {number} limit
- * @returns {Promise<Array<{role: string, content: string}>>}
- */
-async function getConversationHistory(conversationId, limit = 6) {
+async function getConversationHistory(conversationId, limit = 3) {
     try {
         const messages = await Message.find({ conversationId })
             .sort({ createdAt: -1 })
             .limit(limit)
             .lean();
-
         return messages.reverse().map(msg => ({
-            role:    msg.sender === 'user' ? 'user' : 'assistant',
+            role: msg.sender === 'user' ? 'user' : 'assistant',
             content: msg.text
         }));
-    } catch (error) {
-        console.error('[Pipeline] Error fetching conversation history:', error.message);
+    } catch {
         return [];
     }
 }
 
-// ─── الدالة الرئيسية: معالجة رسالة الزبون ────────────────────────────────────
+function containsArabic(str) {
+    return /[\u0600-\u06FF]/.test(str);
+}
 
-/**
- * يعالج رسالة الزبون ويولّد رداً ذكياً محلياً
- * @param {string} messageText
- * @param {string} conversationId
- * @returns {Promise<{text: string, intent: string, sentiment: string}>}
- */
-exports.processMessage = async (messageText, conversationId) => {
-    console.log(`[Pipeline] 📩 Incoming message: "${messageText}"`);
-
-    const cleanedText = messageText.trim();
-
-    // ── 0. تحقق من تفعيل AI لهذه المحادثة ──
-    let conversation;
-    try {
-        conversation = await Conversation.findById(conversationId).lean();
-        if (!conversation || conversation.aiActive === false) {
-            console.log(`[Pipeline] ⏸️ AI paused for conversation ${conversationId} - no reply will be generated`);
-            return { text: null, intent: null, sentiment: null, skipped: true };
-        }
-    } catch (error) {
-        console.error('[Pipeline] Error checking AI state:', error.message);
+function isValidResponse(text) {
+    if (!text || text.length < 5) return false;
+    const bad = ['تعذر', 'غير متاح', 'حدث خطأ', 'مشكلة تقنية', 'آسف لا أستطيع'];
+    for (const w of bad) {
+        if (text.includes(w)) return false;
     }
+    if (!containsArabic(text)) return false;
+    return true;
+}
 
-    // ── 0.5. أول رسالة → عرض المنتجات المتوفرة ──
+const INTENT_MAP = {
+    price_inquiry:      ['سعر', 'ثمن', 'prix'],
+    delivery_inquiry:   ['توصيل', 'ولاية', 'ديليفري', 'livraison'],
+    size_inquiry:       ['مقاس', 'قياس', 'طاي', 'taille'],
+    color_inquiry:      ['لون', 'ألوان', 'couleur'],
+    availability_inquiry: ['متوفر', 'موجود', 'كاين', 'stock', 'ستوك'],
+    product_inquiry:    ['منتج', 'منتوج', 'سلعة', 'نوع'],
+    greeting:           ['سلام', 'ترحيب', 'مرحبا', 'bonjour'],
+    complaint:          ['مشكل', 'شكوى', 'غضب', 'probleme'],
+    order_status:       ['طلب', 'طلبية', 'commande', 'suivi'],
+    payment_inquiry:    ['دفع', 'paiement', 'كارت', 'ccp'],
+    discount_inquiry:   ['تخفيض', 'عرض', 'خصم', 'promo'],
+    working_hours:      ['ساعة', 'وقت', 'يفتح', 'يقفل'],
+    store_info:         ['عنوان', 'موقع', 'مقر', 'adresse'],
+    return_policy:      ['إرجاع', 'تبديل', 'استرجاع', 'retour'],
+    perfume_inquiry:    ['عطر', 'parfum'],
+    shoe_inquiry:       ['حذاء', 'أحذية', 'سنيكرز', 'صندل'],
+    how_to_order:       ['طلب', 'كيفاش', 'شراء', 'طريقة', 'تحميل'],
+};
+
+let cachedTemplates = null;
+let lastTemplateFetch = 0;
+const TEMPLATE_CACHE_TTL = 60000;
+
+async function getTemplates() {
+    const now = Date.now();
+    if (cachedTemplates && (now - lastTemplateFetch) < TEMPLATE_CACHE_TTL) {
+        return cachedTemplates;
+    }
+    cachedTemplates = await TemplateResponse.find({ isActive: true }).lean();
+    lastTemplateFetch = Date.now();
+    return cachedTemplates;
+}
+
+async function searchTemplates(messageText, detectedIntent, keywords) {
     try {
-        const msgCount = await Message.countDocuments({ conversationId });
-        if (msgCount <= 1 && conversation) {
-            const products = await Product.find({ isActive: true }).limit(5).lean();
-            if (products.length > 0) {
-                const offerLines = products.map(p => `${p.name}: ${p.price} دج`).join(' | ');
-                const productImages = products.flatMap(p => p.images || []);
-                const welcomeText = `مرحبا بيك في وردة 🌸 عندنا هاذ المنتجات: ${offerLines}. تحب تسأل على حاجة معينة؟`;
-                console.log(`[Pipeline] 🎉 First message → showing products`);
-                const io = getIO();
-                if (io) {
-                    io.to('monitor_room').emit('new_ai_response', {
-                        conversationId,
-                        customerMessage: cleanedText,
-                        aiResponse: welcomeText,
-                        intent: 'greeting',
-                        sentiment: 'positive',
-                        images: productImages.slice(0, 5),
-                        timestamp: new Date().toISOString()
-                    });
+        const allTemplates = await getTemplates();
+        if (!allTemplates.length) {
+            console.log('[Templates] No active templates found');
+            return null;
+        }
+
+        let bestTemplate = null;
+        let bestScore = 0;
+
+        for (const tpl of allTemplates) {
+            let score = 0;
+
+            if (tpl.intent && detectedIntent) {
+                const mapKw = INTENT_MAP[detectedIntent] || [detectedIntent];
+                const tplI = tpl.intent.toLowerCase().trim();
+                if (mapKw.some(kw => tplI.includes(kw))) {
+                    score += 2;
                 }
-                return { text: welcomeText, intent: 'greeting', sentiment: 'positive', images: productImages.slice(0, 5) };
+            }
+
+            const userWords = messageText.split(/\s+/).filter(w => w.length > 2);
+            if (userWords.length > 0 && tpl.questions?.length) {
+                for (const question of tpl.questions) {
+                    const qWords = question.split(/\s+/).filter(w => w.length > 2);
+                    const matches = userWords.filter(w =>
+                        qWords.some(qw => qw.includes(w) || w.includes(qw))
+                    );
+                    const qScore = userWords.length > 0
+                        ? (matches.length / userWords.length) * 2
+                        : 0;
+                    if (qScore > score) score = qScore;
+                }
+            }
+
+            if (keywords?.length && tpl.questions?.length) {
+                for (const kw of keywords) {
+                    for (const q of tpl.questions) {
+                        if (q.includes(kw)) { score += 1; break; }
+                    }
+                }
+            }
+
+            console.log(`[Templates] "${tpl.intent}" score=${score}`);
+            if (score > bestScore) {
+                bestScore = score;
+                bestTemplate = tpl;
             }
         }
-    } catch (error) {
-        console.error('[Pipeline] Error in first-message offer check:', error.message);
+
+        console.log(`[Templates] Best: "${bestTemplate?.intent}" score=${bestScore} threshold=0.5`);
+        if (bestTemplate && bestScore >= 0.5) {
+            console.log(`[Pipeline] Template matched: "${bestTemplate.text.substring(0, 60)}..."`);
+            return bestTemplate.text;
+        }
+        console.log('[Templates] No template matched, falling through');
+        return null;
+    } catch (err) {
+        console.log('[Templates] Error:', err.message);
+        return null;
+    }
+}
+
+exports.processMessage = async (messageText, conversationId) => {
+    const cleanedText = messageText.trim();
+    console.log(`[Pipeline] Incoming: "${cleanedText}"`);
+
+    let settings = null;
+    try { settings = await BotSettings.findOne(); } catch {}
+    const botName = settings?.botName || 'وردة';
+    const langStyle = settings?.languageStyle || 'darija';
+    const fallbackMsg = settings?.fallbackMessage || 'عفواً، ما فهمتش الرسالة. تقدر تعيد صياغتها؟';
+    const welcomeMsg = settings?.welcomeMessage || `مرحبا بيك في ${botName} 🌸 كيف نقدر نعاونك؟`;
+    const langInstruction = LANG_PROMPTS[langStyle] || LANG_PROMPTS.darija;
+
+    let conversation;
+    try {
+        conversation = await Conversation.findById(conversationId);
+        if (!conversation) return { text: null, intent: null, sentiment: null, skipped: true };
+    } catch {
+        return { text: null, intent: null, sentiment: null, skipped: true };
     }
 
-    // ── 1. تحليل الرسالة (Intent, Sentiment, Keywords) محلياً ──
-    const { intent, sentiment, keywords } = analyzeMessage(cleanedText);
-    console.log(`[Pipeline] 🔍 Analysis → intent: ${intent} | sentiment: ${sentiment} | keywords: [${keywords.join(', ')}]`);
+    if (conversation.status === 'HANDOFF' || conversation.status === 'CLOSED') {
+        console.log('[Pipeline] Conversation is HANDOFF/CLOSED - skipping');
+        return { text: null, intent: null, sentiment: null, skipped: true };
+    }
 
-    // ── 2. تفعيل نظام التحويل (Handoff) إذا كان الزبون غاضباً ──
+    if (conversation.aiActive === false) {
+        console.log('[Pipeline] AI paused - skipping');
+        return { text: null, intent: null, sentiment: null, skipped: true };
+    }
+
+    const { intent, sentiment, keywords } = analyzeMessage(cleanedText);
+
     if (sentiment === 'negative') {
         await Conversation.findByIdAndUpdate(conversationId, { status: 'HANDOFF' });
-        console.log('[Pipeline] 🚨 HANDOFF activated due to negative sentiment.');
-
-        // ── إرسال إشعار فوري للموظفين عبر Socket.IO ──
         const io = getIO();
         if (io) {
-            io.to('monitor_room').emit('handoff_alert', {
-                conversationId,
-                customerMessage: cleanedText,
-                intent,
-                sentiment,
-                timestamp: new Date().toISOString()
-            });
-            console.log('[Pipeline] 📡 Handoff notification sent via Socket.IO');
+            io.to('monitor_room').emit('handoff_alert', { conversationId, intent, sentiment });
         }
-
         return {
-            text:      'سمحلي بزاف على الإزعاج 🙏 راح نحوّل المحادثة لموظف باش يعاونك مباشرة ويحل معك أي مشكلة.',
-            intent,
-            sentiment
+            text: 'نعتذر منك على الإزعاج 🙏 راح نحولك للموظف باش يشوف الطلب تاعك ويساعدك أكثر.',
+            intent, sentiment
         };
     }
 
-    // ── 3. البحث عن قوالب خاصة بالمنتج (Question Matching) ──
-    if (keywords.length > 0) {
-        try {
-            const matchedProducts = await Product.find({
-                $or: [
-                    { name: { $regex: keywords.join('|'), $options: 'i' } },
-                    { category: { $regex: keywords.join('|'), $options: 'i' } }
-                ]
-            }).limit(3).lean();
-
-            if (matchedProducts.length > 0) {
-                const productIds = matchedProducts.map(p => p._id);
-                const messageWords = cleanedText.split(/\s+/).filter(w => w.length > 2);
-
-                // البحث عن قالب يحتوي على سؤال يطابق كلمات الرسالة
-                const productTemplate = await TemplateResponse.findOne({
-                    productId: { $in: productIds },
-                    questions: { $elemMatch: { $regex: messageWords.join('|'), $options: 'i' } },
-                    isActive: true
-                }).lean();
-
-                if (productTemplate) {
-                    console.log(`[Pipeline] 📋 Product template matched for: ${matchedProducts[0].name}`);
-                    return { text: productTemplate.text, intent, sentiment };
-                }
-            }
-        } catch (error) {
-            console.error('[Pipeline] Error matching product templates:', error.message);
-        }
+    let responseText = '';
+    let isFirstMessage = false;
+    if (!conversation.welcomeSent) {
+        responseText = welcomeMsg;
+        isFirstMessage = true;
+        await Conversation.findByIdAndUpdate(conversationId, { welcomeSent: true });
     }
 
-    // ── 4. البحث عن قوالب عامة في قاعدة البيانات ──
-    try {
-        const messageWords = cleanedText.split(/\s+/).filter(w => w.length > 2);
-        const template = await TemplateResponse.findOne({
-            productId: null,
-            isActive: true,
-            questions: { $elemMatch: { $regex: messageWords.join('|'), $options: 'i' } }
-        }).lean();
-        if (template) {
-            console.log(`[Pipeline] 📋 General template matched`);
-            return { text: template.text, intent, sentiment };
-        }
-    } catch (error) {
-        console.error('[Pipeline] Error fetching general templates:', error.message);
+    // If first message is a greeting → welcome only, skip template/AI
+    if (isFirstMessage && intent === 'greeting') {
+        return { text: responseText, intent, sentiment };
     }
 
-    // ── 5. ردود القوالب الجاهزة للأسئلة الشائعة (بدون Ollama) ──
-    const DEFAULT_TEMPLATES = {
-        greeting: 'وعليكم السلام ورحمة الله وبركاته 😊 كيف نقدر نعاونك اليوم؟ واش تحب تشوف من المنتجات؟',
-        price_inquiry: 'السعر يختلف على حساب المنتج. واش تحدد المنتج اللي حاب تشوف سعره؟ عندنا تشكيلة متنوعة.',
-        delivery_inquiry: 'نعم التوصيل متوفر لجميع ولايات الجزائر ✅ والدفع عند الاستلام. كم يوم تحب نوصلو؟',
-        size_inquiry: 'المقاسات متوفرة من 52 حتى 58. واش المقاس اللي حاب تعاين عليه بالضبط؟',
-        color_inquiry: 'عندنا تشكيلة ألوان متنوعة 🎨 على حساب المنتج. واش لون اللي تحب تشوف؟',
-        availability_inquiry: 'المنتج متوفر حالياً ✅ تقدر تطلبيه الآن والتوصيل لجميع الولايات.',
-        payment_inquiry: 'الدفع عند الاستلام ✅ وصل المنتج عند باب دارك وخلصت. آمن ومضمون.',
-        order_status: 'ضرك نتحقق من طلبك ونرجعلك خبر. شكراً على صبرك 🙏',
-        complaint: 'نعتذر منك بزاف على هاد المشكل 🙏 ضرك نحوّلك لموظف باش يعاونك مباشرة.',
-        product_inquiry: 'عندنا تشكيلة واسعة من المنتجات. واش تحب تعاين بالضبط؟ نعاونك في البحث.',
-        wholesale_inquiry: 'نعم البيع بالجملة متوفر 📦 أقل كمية 12 قطعة. تحب تعرف الأسعار بالتفصيل؟',
-        thanks: 'العفو 🙏 هذا واجبنا. في خدمتك أي وقت تحب.',
-        follow_up: 'نعم خويا 😊 واش تحب تسأل أكثر؟',
-        general: 'نقدر نعاونك بواش تحب 😊 واش تطلب من المنتجات اللي عندنا؟',
-        unknown: 'سمحلي ما فهمتش مليح 😅 تقدر توضّح أكثر؟ واش تحب بالضبط؟'
-    };
-
-    if (DEFAULT_TEMPLATES[intent]) {
-        console.log(`[Pipeline] 📋 Default template reply for intent: ${intent}`);
-        return { text: DEFAULT_TEMPLATES[intent], intent, sentiment };
+    const templateText = await searchTemplates(cleanedText, intent, keywords);
+    if (templateText) {
+        const finalText = responseText ? `${responseText}\n\n${templateText}` : templateText;
+        return { text: finalText, intent: templateText.includes('السعر') ? 'price_inquiry' : intent, sentiment };
     }
 
-    // ── 6. جلب سياق المنتجات من MongoDB ──
-    const productContext = await getProductContext(keywords);
-    console.log(`[Pipeline] 🛒 Product context ready (${productContext.length} chars)`);
+    const cached = getCached(cleanedText);
+    if (cached) {
+        console.log('[Pipeline] Cache hit');
+        const finalText = responseText ? `${responseText}\n\n${cached}` : cached;
+        return { text: finalText, intent, sentiment };
+    }
 
-    // ── 7. جلب تاريخ المحادثة ──
-    const conversationHistory = await getConversationHistory(conversationId);
+    const productCtx = await getProductContext(keywords);
+    const history = await getConversationHistory(conversationId);
 
-    // ── 6. بناء قائمة الرسائل لإرسالها لـ Ollama ──
-    const messages = [
-        { role: 'system', content: WARDA_SYSTEM_PROMPT },
-        ...conversationHistory,
-        {
-            role: 'user',
-            content: `رسالة الزبون: ${cleanedText}\n\n[معلومات المنتجات من المخزون]:\n${productContext}`
-        }
+    const systemPrompt = `You are "${botName}", a helpful Algerian store assistant.
+${langInstruction}
+- Reply in 1-2 short sentences.
+- Be direct and helpful.`;
+
+    const userContent = `سؤال: ${cleanedText}
+نية: ${intent}
+${productCtx || ''}`;
+
+    const aiMessages = [
+        { role: 'system', content: systemPrompt },
+        ...history,
+        { role: 'user', content: userContent }
     ];
 
-    // ── 7. توليد الرد عبر النموذج المحلي (Ollama) ──
-    console.log('[Pipeline] 🤖 Sending request to Ollama...');
-    const rawResponse = await generateLocalResponse(messages);
-    const aiResponseText = trimResponse(rawResponse);
-    console.log(`[Pipeline] ✅ Reply: "${aiResponseText.substring(0, 80)}..."`);
+    console.log('[Pipeline] Sending to Ollama...');
+    const rawResponse = await generateLocalResponse(aiMessages);
 
-    // ── 8. بث الرد للمراقبة الحية عبر Socket.IO ──
-    const io = getIO();
-    if (io) {
-        io.to('monitor_room').emit('new_ai_response', {
-            conversationId,
-            customerMessage: cleanedText,
-            aiResponse: aiResponseText,
-            intent,
-            sentiment,
-            timestamp: new Date().toISOString()
-        });
+    if (rawResponse && rawResponse.length > 5) {
+        const aiText = trimResponse(rawResponse);
+        console.log(`[Pipeline] AI reply: "${aiText.substring(0, 60)}..."`);
+
+        if (isValidResponse(aiText)) {
+            const finalText = responseText ? `${responseText}\n\n${aiText}` : aiText;
+            setCached(cleanedText, aiText);
+            const io = getIO();
+            if (io) {
+                io.to('monitor_room').emit('new_ai_response', {
+                    conversationId, intent, sentiment, aiResponse: aiText
+                });
+            }
+            return { text: finalText, intent, sentiment };
+        }
+
+        console.log('[Pipeline] AI response invalid - handing off');
     }
 
-    return { text: aiResponseText, intent, sentiment };
+    if (isFirstMessage) {
+        await Conversation.findByIdAndUpdate(conversationId, { status: 'HANDOFF' });
+        const io = getIO();
+        if (io) {
+            io.to('monitor_room').emit('handoff_alert', { conversationId, intent, sentiment });
+        }
+        return {
+            text: `${responseText}\n\nنعتذر منك، راح نحولك للموظف باش يساعدك أكثر.`,
+            intent, sentiment
+        };
+    }
+
+    return { text: fallbackMsg, intent: intent || 'unknown', sentiment };
 };

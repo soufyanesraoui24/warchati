@@ -10,8 +10,8 @@
  */
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
-const OLLAMA_MODEL    = process.env.OLLAMA_MODEL || 'mistral';
-const OLLAMA_TIMEOUT  = parseInt(process.env.OLLAMA_TIMEOUT_MS || '60000', 10);
+const OLLAMA_MODEL    = process.env.OLLAMA_MODEL || 'llama3.2:1b';
+const OLLAMA_TIMEOUT  = parseInt(process.env.OLLAMA_TIMEOUT_MS || '5000', 10);
 
 /**
  * يرسل قائمة رسائل إلى Ollama ويعيد رد النموذج
@@ -33,11 +33,13 @@ async function generateLocalResponse(messages) {
                 model:    OLLAMA_MODEL,
                 messages,
                 stream:   false,
+                keep_alive: '24h',
                 options: {
-                    temperature: 0.2,   // منخفضة لردود دقيقة ومتوقعة
-                    num_predict: 80,    // حد أقصى للكلمات (ردود قصيرة فقط)
-                    top_k: 20,
-                    top_p: 0.7,
+                    temperature: 0.1,
+                    num_predict: 60,
+                    num_ctx: 512,
+                    top_k: 10,
+                    top_p: 0.5,
                 }
             })
         });
@@ -113,4 +115,25 @@ async function checkOllamaStatus() {
     }
 }
 
-module.exports = { generateLocalResponse, checkOllamaStatus };
+async function warmupModel() {
+    try {
+        console.log(`[LocalAI] Warming up ${OLLAMA_MODEL}...`);
+        const res = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: AbortSignal.timeout(30000),
+            body: JSON.stringify({
+                model: OLLAMA_MODEL,
+                messages: [{ role: 'user', content: 'مرحبا' }],
+                stream: false,
+                keep_alive: '24h',
+                options: { temperature: 0.3, num_predict: 10, num_ctx: 512, top_k: 10, top_p: 0.5 }
+            })
+        });
+        if (res.ok) console.log(`[LocalAI] ${OLLAMA_MODEL} warmed up`);
+    } catch (e) {
+        console.log(`[LocalAI] Warmup skipped: ${e.message}`);
+    }
+}
+
+module.exports = { generateLocalResponse, checkOllamaStatus, warmupModel };

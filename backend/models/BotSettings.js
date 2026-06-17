@@ -34,6 +34,30 @@ const botSettingsSchema = new mongoose.Schema({
   afterHoursMessage: {
     type: String,
     default: 'السلام عليكم! وقت العمل الرسمي من 09:00 إلى 18:00. غدوا نردو عليك في أقرب وقت.'
+  },
+  fallbackMessage: {
+    type: String,
+    default: 'عفواً، ما فهمتش الرسالة. تقدر تعيد صياغتها؟ أو اتصل بنا على الرقم المخصص للمساعدة.'
+  },
+  replyDelay: {
+    type: Number,
+    default: 2,
+    min: 0,
+    max: 60
+  },
+  followUpEnabled: {
+    type: Boolean,
+    default: false
+  },
+  followUpDelay: {
+    type: Number,
+    default: 30,
+    min: 1,
+    max: 1440
+  },
+  followUpMessage: {
+    type: String,
+    default: 'مرحباً، مازال المهتم بالمنتج؟ العرض لسة متوفر. نحن هنا لمساعدتك!'
   }
 }, { timestamps: true });
 

@@ -5,45 +5,73 @@ import { Mail, Lock, Chrome, Loader2, UserCircle } from 'lucide-react';
 
 export default function Login() {
     const [searchParams] = useSearchParams();
-    const { login: authLogin, mockLogin: authMockLogin, MOCK_USERS } = useAuth();
+    const { user: authUser, login: authLogin, mockLogin: authMockLogin, MOCK_USERS } = useAuth();
     const navigate = useNavigate();
+
+    // Already authenticated → redirect
+    useEffect(() => {
+        if (authUser) {
+            navigate('/', { replace: true });
+        }
+    }, [authUser, navigate]);
     const [form, setForm] = useState({ email: '', password: '' });
     const [error, setError] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
+    // Handle Google OAuth callback in popup
     useEffect(() => {
         const token = searchParams.get('token');
+        const errorParam = searchParams.get('error');
+
         if (token) {
             localStorage.setItem('access_token', token);
             const userParam = searchParams.get('user');
             if (userParam) {
-                try { localStorage.setItem('user', decodeURIComponent(userParam)); } catch {}
+                try {
+                    const user = JSON.parse(decodeURIComponent(userParam));
+                    localStorage.setItem('warchati_user', JSON.stringify(user));
+                } catch {}
             }
             if (window.opener) {
-                window.opener.postMessage({ type: 'GOOGLE_LOGIN', token, user: userParam }, '*');
+                window.opener.postMessage({ type: 'GOOGLE_LOGIN' }, '*');
                 window.close();
             } else {
                 window.location.href = '/';
             }
+            return;
         }
-        const errorParam = searchParams.get('error');
+
         if (errorParam === 'google_failed') {
-            setError('Google login failed. Please try again.');
+            if (window.opener) {
+                window.opener.postMessage({ type: 'GOOGLE_LOGIN_ERROR' }, '*');
+                window.close();
+            } else {
+                setError('Google login failed. Please try again.');
+            }
         }
     }, [searchParams]);
 
+    // Listen for Google login messages + storage changes from popup
     useEffect(() => {
         const handleGoogleMessage = (e) => {
-            if (e.data?.type === 'GOOGLE_LOGIN' && e.data?.token) {
-                localStorage.setItem('access_token', e.data.token);
-                if (e.data?.user) {
-                    try { localStorage.setItem('user', decodeURIComponent(e.data.user)); } catch {}
-                }
+            if (e.data?.type === 'GOOGLE_LOGIN') {
+                window.location.reload();
+            }
+            if (e.data?.type === 'GOOGLE_LOGIN_ERROR') {
+                setError('Google login failed. Please try again.');
+            }
+        };
+        const handleStorageChange = (e) => {
+            if (e.key === 'access_token' && e.newValue) {
                 window.location.reload();
             }
         };
         window.addEventListener('message', handleGoogleMessage);
-        return () => window.removeEventListener('message', handleGoogleMessage);
+        window.addEventListener('storage', handleStorageChange);
+        return () => {
+            window.removeEventListener('message', handleGoogleMessage);
+            window.removeEventListener('storage', handleStorageChange);
+        };
     }, []);
 
     const handleManualLogin = async (e) => {
@@ -120,8 +148,6 @@ export default function Login() {
                             Sign In
                         </button>
                     </form>
-
-
 
                 {/* Divider */}
                 <div className="flex items-center gap-3">

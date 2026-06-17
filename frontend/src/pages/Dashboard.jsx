@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   MessageSquare, Bot, AlertTriangle, ArrowUpRight, ArrowDownRight,
-  BarChart3, Target, TrendingUp
+  BarChart3, Target, TrendingUp, Package, Users
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -34,10 +34,12 @@ export default function Dashboard() {
   }, []);
 
   const stats = overview ? [
-    { title: 'إجمالي المحادثات اليوم', value: overview.totalConversations ?? 0, change: overview.conversationsChange ?? '+0%', isUp: (overview.conversationsChange ?? '').startsWith('+'), icon: MessageSquare },
-    { title: 'الرسائل اليوم', value: overview.totalMessages ?? 0, change: overview.messagesChange ?? '+0%', isUp: (overview.messagesChange ?? '').startsWith('+'), icon: BarChart3 },
-    { title: 'تم بواسطة AI', value: overview.aiHandled ?? 0, change: overview.aiChange ?? '+0%', isUp: (overview.aiChange ?? '').startsWith('+'), icon: Bot },
-    { title: 'تحويل يدوي', value: overview.handoffs ?? 0, change: overview.handoffChange ?? '+0%', isUp: (overview.handoffChange ?? '').startsWith('+'), icon: AlertTriangle },
+    { title: 'المحادثات اليوم', value: overview.today?.conversations ?? 0, change: '', isUp: true, icon: MessageSquare },
+    { title: 'الرسائل اليوم', value: overview.today?.messages ?? 0, change: '', isUp: true, icon: BarChart3 },
+    { title: 'تم بواسطة AI', value: overview.today?.aiHandled ?? 0, change: '', isUp: true, icon: Bot },
+    { title: 'تحتاج تدخل بشري', value: overview.total?.pendingHandoffs ?? 0, change: '', isUp: false, icon: AlertTriangle },
+    { title: 'المنتجات', value: overview.total?.products ?? 0, change: '', isUp: true, icon: Package },
+    { title: 'الزبائن النشطون', value: overview.total?.activeCustomers ?? 0, change: '', isUp: true, icon: Users },
   ] : [];
 
   const resolutionData = handoffRate ? [
@@ -81,7 +83,7 @@ export default function Dashboard() {
         <p className="text-slate-500 dark:text-slate-400 mt-1">نظرة عامة على أداء المساعد الذكي والمحادثات</p>
       </div>
 
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {stats.map((stat) => (
           <StatCard key={stat.title} {...stat} />
         ))}
