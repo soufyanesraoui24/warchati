@@ -83,12 +83,10 @@ const path = require('path');
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
 
 // API 404 handler
-app.use('/api/*', (req, res) => {
-    res.status(404).json({ success: false, message: 'API endpoint not found' });
-});
-
-// SPA fallback: non-API routes → index.html
-app.get('*', (req, res) => {
+app.use((req, res) => {
+    if (req.path.startsWith('/api')) {
+        return res.status(404).json({ success: false, message: 'API endpoint not found' });
+    }
     res.sendFile(path.join(__dirname, '../frontend/dist/index.html'), err => {
         if (err) res.status(500).send('Server error');
     });
