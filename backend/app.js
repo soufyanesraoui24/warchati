@@ -78,7 +78,23 @@ app.use('/api/channels', channelRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/bot-settings', botSettingsRoutes);
 
-// Error handler
+// Serve frontend build in production
+const path = require('path');
+app.use(express.static(path.join(__dirname, '../frontend/dist')));
+
+// API 404 handler
+app.use('/api/*', (req, res) => {
+    res.status(404).json({ success: false, message: 'API endpoint not found' });
+});
+
+// SPA fallback: non-API routes → index.html
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/dist/index.html'), err => {
+        if (err) res.status(500).send('Server error');
+    });
+});
+
+// General error handler
 app.use(errorMiddleware);
 
 module.exports = app;
