@@ -1,8 +1,11 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 
 const Product          = require('./models/Product');
 const TemplateResponse = require('./models/TemplateResponse');
+const User             = require('./models/User');
+const BotSettings      = require('./models/BotSettings');
 
 const img = (name) => `https://placehold.co/400x400/1a1a2e/ffffff?text=${encodeURIComponent(name)}`;
 
@@ -252,33 +255,71 @@ const TEMPLATES = [
     },
 ];
 
-async function seedDatabase() {
-    console.log('🌱 بدء زرع البيانات في قاعدة البيانات...\n');
+async function seedIfEmpty() {
+    // ── منتجات ──
+    const existingProducts = await Product.countDocuments();
+    if (existingProducts === 0) {
+        await Product.insertMany(PRODUCTS);
+        console.log(`[Seed] ✅ ${PRODUCTS.length} منتج`);
+    } else {
+        console.log(`[Seed] ⏭️ المنتجات موجودة (${existingProducts})`);
+    }
 
+    // ── قوالب الردود ──
+    const existingTemplates = await TemplateResponse.countDocuments();
+    if (existingTemplates === 0) {
+        await TemplateResponse.insertMany(TEMPLATES);
+        console.log(`[Seed] ✅ ${TEMPLATES.length} قالب رد`);
+    } else {
+        console.log(`[Seed] ⏭️ القوالب موجودة (${existingTemplates})`);
+    }
+
+    // ── أدمن (إذا ما كاينش) ──
+    const existingAdmin = await User.findOne({ email: 'admin@warchati.dev' });
+    if (!existingAdmin) {
+        const hashed = await bcrypt.hash('admin123', 10);
+        await User.create({
+            name: 'Admin',
+            email: 'admin@warchati.dev',
+            password: hashed,
+            role: 'ADMIN',
+            authProvider: 'local'
+        });
+        console.log('[Seed] ✅ أدمن (admin@warchati.dev / admin123)');
+    } else {
+        console.log('[Seed] ⏭️ الأدمن موجود');
+    }
+
+    // ── إعدادات البوت (إذا ما كاينش) ──
+    const existingSettings = await BotSettings.countDocuments();
+    if (existingSettings === 0) {
+        await BotSettings.create({
+            botName: 'وردة',
+            languageStyle: 'darija',
+            welcomeMessage: 'مرحبا بيك في وردة 🌸 كيف نقدر نعاونك؟',
+            fallbackMessage: 'عفواً، ما فهمتش الرسالة. تقدر تعيد صياغتها؟'
+        });
+        console.log('[Seed] ✅ إعدادات البوت');
+    } else {
+        console.log('[Seed] ⏭️ إعدادات البوت موجودة');
+    }
+}
+
+async function seedDatabase() {
+    console.log('🌱 بدء زرع البيانات...');
     try {
         await mongoose.connect(process.env.DATABASE_URL);
-        console.log('✅ تم الاتصال بـ MongoDB بنجاح');
-
-        await Product.deleteMany({});
-        const insertedProducts = await Product.insertMany(PRODUCTS);
-        console.log(`\n📦 تم زرع ${insertedProducts.length} منتج:`);
-        insertedProducts.forEach(p => console.log(`   • ${p.name} - ${p.price} دج [${p.images?.length || 0} صورة]`));
-
-        await TemplateResponse.deleteMany({});
-        const insertedTemplates = await TemplateResponse.insertMany(TEMPLATES);
-        console.log(`\n📋 تم زرع ${insertedTemplates.length} قالب رد جاهز:`);
-        insertedTemplates.forEach(t => console.log(`   • ${t.intent}: ${t.text.substring(0, 50)}...`));
-
-        console.log('\n🎉 اكتمل الزرع بنجاح!');
-        console.log('─'.repeat(50));
-        console.log('يمكنك الآن تشغيل السيرفر: npm start');
-
+        await seedIfEmpty();
+        console.log('[Seed] ✅ اكتمل');
     } catch (error) {
-        console.error('❌ خطأ في الزرع:', error.message);
+        console.error('[Seed] ❌', error.message);
     } finally {
         await mongoose.disconnect();
         process.exit(0);
     }
 }
 
-seedDatabase();
+// إذا تشغيل مباشر: node seed_data.js
+if (require.main === module) seedDatabase();
+
+module.exports = { seedIfEmpty };

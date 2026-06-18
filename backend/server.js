@@ -7,6 +7,7 @@ const app = require('./app');
 const connectDB = require('./config/database');
 const { initSocket, getIO } = require('./config/socket');
 const { startFollowUpService } = require('./services/followUpService');
+const { seedIfEmpty } = require('./seed_data');
 const mongoose = require('mongoose');
 
 const PORT = process.env.PORT || 5000;
@@ -23,21 +24,32 @@ if (missing.length) {
 
 const server = http.createServer(app);
 
-// Connect to MongoDB
-connectDB();
+async function start() {
+    // Connect to MongoDB
+    await connectDB();
 
-// Initialize Socket.IO
-initSocket(server);
+    // Seed initial data (إذا القاعدة فارغة)
+    try {
+        await seedIfEmpty();
+    } catch (err) {
+        console.error('[Seed] ❌', err.message);
+    }
 
-// Start follow-up automation
-startFollowUpService();
+    // Initialize Socket.IO
+    initSocket(server);
 
-// Start server
-server.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-    console.log(`[Socket.IO] 🔌 WebSocket ready on port ${PORT}`);
-    console.log(`[FollowUp] ⏰ Automation service active`);
-});
+    // Start follow-up automation
+    startFollowUpService();
+
+    // Start server
+    server.listen(PORT, () => {
+        console.log(`Server is running on port ${PORT}`);
+        console.log(`[Socket.IO] 🔌 WebSocket ready on port ${PORT}`);
+        console.log(`[FollowUp] ⏰ Automation service active`);
+    });
+}
+
+start();
 
 // ═══════════════════════════════════════════════
 // GRACEFUL SHUTDOWN
