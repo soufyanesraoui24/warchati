@@ -47,6 +47,7 @@ cd $APP_DIR
 # 8. إنشاء ملف البيئة
 echo "[7/8] إعداد البيئة..."
 cat > backend/.env << EOF
+NODE_ENV=production
 DATABASE_URL="mongodb://127.0.0.1:27017/$MONGO_DB"
 PORT=5000
 JWT_SECRET="$(openssl rand -base64 32)"
@@ -76,24 +77,65 @@ cd $APP_DIR/frontend && npm install && npm run build
 
 # 10. تشغيل السيرفر عبر PM2
 echo "تشغيل السيرفر..."
-sudo npm install -g pm2
+sudo npm install -g pm2 pm2-logrotate
+pm2 set pm2-logrotate:max_size 100M
+pm2 set pm2-logrotate:retain 7
 cd $APP_DIR/backend
-pm2 start server.js --name ai-socialmind
+NODE_ENV=production pm2 start server.js --name ai-socialmind
 pm2 save
 sudo env PATH=\$PATH:/usr/bin pm2 startup systemd -u $USER --hp $HOME
 
-# 11. فتح المنفذ في جدار الحماية
-sudo ufw allow 5000/tcp
-sudo ufw allow ssh
+# 11. تركيب Nginx (للـ domain و SSL)
+echo "تركيب Nginx..."
+sudo apt install -y nginx
+if [ -n "$DOMAIN" ]; then
+    cat > /tmp/ai-socialmind << NGINX
+server {
+    listen 80;
+    server_name $DOMAIN;
 
-# 12. معلومات التنصيب
+    location / {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_read_timeout 86400;
+    }
+}
+NGINX
+    sudo mv /tmp/ai-socialmind /etc/nginx/sites-available/ai-socialmind
+    sudo ln -sf /etc/nginx/sites-available/ai-socialmind /etc/nginx/sites-enabled/
+    sudo rm -f /etc/nginx/sites-enabled/default
+    sudo systemctl reload nginx
+
+    # Certbot لـ SSL
+    sudo apt install -y certbot python3-certbot-nginx
+    sudo certbot --nginx -d $DOMAIN --non-interactive --agree-tos -m admin@$DOMAIN || echo "⚠️ Certbot فشل، ركّب SSL يدوياً بعدين"
+else
+    echo "⚠️ ما حطيتيش domain. السيرفر يشتغل على http://IP:5000"
+    echo "  عبي DOMAIN في السكريبت واعد التشغيل عشان Nginx"
+fi
+
+# 12. فتح المنفذ في جدار الحماية
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw allow ssh
+sudo ufw --force enable
+
+# 13. معلومات التنصيب
 IP=$(curl -s ifconfig.me)
 echo ""
 echo "============================================"
 echo "  ✅ تم النشر بنجاح!"
 echo "============================================"
 echo ""
-echo "  العنوان:   http://$IP:5000"
+if [ -n "$DOMAIN" ]; then
+    echo "  العنوان:   https://$DOMAIN"
+else
+    echo "  العنوان:   http://$IP:5000"
+fi
 echo "  API:       http://$IP:5000/health"
 echo ""
 echo "  MongoDB:   mongodb://127.0.0.1:27017/$MONGO_DB"

@@ -5,7 +5,7 @@
 
 const { analyzeMessage } = require('../services/messageAnalyzer');
 const aiPipelineService = require('../services/aiPipelineService');
-const { checkOllamaStatus } = require('../services/localAIService');
+const { checkGroqStatus } = require('../services/groqAIService');
 const responseHelper = require('../helpers/responseHelper');
 
 /**
@@ -66,11 +66,11 @@ exports.generateReply = async (req, res) => {
 
 /**
  * GET /api/ai/status
- * فحص حالة Ollama والنموذج المحلي
+ * فحص حالة Groq AI
  */
 exports.getBotStatus = async (req, res) => {
     try {
-        const status = await checkOllamaStatus();
+        const status = await checkGroqStatus();
 
         const httpCode = status.running ? 200 : 503;
         return res.status(httpCode).json({

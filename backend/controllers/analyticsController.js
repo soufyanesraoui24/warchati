@@ -200,6 +200,61 @@ exports.getSentimentTrend = async (req, res) => {
     }
 };
 
+exports.getEmotionStats = async (req, res) => {
+    try {
+        const days = parseInt(req.query.days) || 30;
+        const startDate = getDateRange(days);
+
+        const data = await Message.aggregate([
+            { $match: { createdAt: { $gte: startDate }, emotion: { $exists: true, $ne: null } } },
+            { $group: { _id: '$emotion', count: { $sum: 1 } } },
+            { $sort: { count: -1 } }
+        ]);
+
+        const total = data.reduce((s, d) => s + d.count, 0) || 1;
+        return responseHelper.success(res, data.map(d => ({
+            emotion: d._id,
+            count: d.count,
+            percentage: Math.round((d.count / total) * 100)
+        })));
+    } catch (error) {
+        console.error('❌ Error fetching emotion stats:', error.message);
+        return responseHelper.error(res, 'حدث خطأ أثناء جلب إحصائيات المشاعر', 500);
+    }
+};
+
+exports.getEmotionTrend = async (req, res) => {
+    try {
+        const days = parseInt(req.query.days) || 7;
+        const startDate = getDateRange(days);
+
+        const data = await Message.aggregate([
+            { $match: { createdAt: { $gte: startDate }, emotion: { $exists: true, $ne: null } } },
+            {
+                $group: {
+                    _id: {
+                        date: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+                        emotion: '$emotion'
+                    },
+                    count: { $sum: 1 }
+                }
+            },
+            { $sort: { '_id.date': 1 } }
+        ]);
+
+        const map = {};
+        data.forEach(d => {
+            if (!map[d._id.date]) map[d._id.date] = { date: d._id.date };
+            map[d._id.date][d._id.emotion] = d.count;
+        });
+
+        return responseHelper.success(res, Object.values(map));
+    } catch (error) {
+        console.error('❌ Error fetching emotion trend:', error.message);
+        return responseHelper.error(res, 'حدث خطأ أثناء جلب اتجاه المشاعر', 500);
+    }
+};
+
 exports.getHourlyDistribution = async (req, res) => {
     try {
         const days = parseInt(req.query.days) || 30;

@@ -80,6 +80,10 @@ exports.simulateMessage = async (req, res) => {
             text: botText,
             intent: aiResult?.intent,
             sentiment: aiResult?.sentiment,
+            emotion: aiResult?.emotion,
+            emotionScore: aiResult?.emotionScore,
+            emotions: aiResult?.emotions || [],
+            needsHandoff: aiResult?.needsHandoff || false,
             images: aiResult?.images || []
         });
 
@@ -91,6 +95,10 @@ exports.simulateMessage = async (req, res) => {
                 aiResponse: botText,
                 intent: aiResult.intent,
                 sentiment: aiResult.sentiment,
+                emotion: aiResult?.emotion,
+                emotionScore: aiResult?.emotionScore,
+                emotions: aiResult?.emotions || [],
+                needsHandoff: aiResult?.needsHandoff,
                 images: aiResult?.images || [],
                 timestamp: new Date().toISOString()
             });
@@ -111,7 +119,10 @@ exports.simulateMessage = async (req, res) => {
                 id: botMessage._id,
                 text: botText,
                 intent: aiResult.intent,
-                sentiment: aiResult.sentiment
+                sentiment: aiResult.sentiment,
+                emotion: aiResult.emotion,
+                emotionScore: aiResult.emotionScore,
+                emotions: aiResult.emotions || []
             }
         }, 'تمت محاكاة الرسالة بنجاح', 201);
     } catch (error) {

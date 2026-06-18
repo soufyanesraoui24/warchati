@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const passport = require('./config/passport');
 const connectDB = require('./config/database');
@@ -24,7 +25,11 @@ const botSettingsRoutes = require('./routes/botSettingsRoutes');
 const app = express();
 
 // Middleware
-app.use(cors());
+app.use(helmet());
+app.use(cors({
+    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    credentials: true
+}));
 app.use(express.json());
 app.use(passport.initialize());
 
@@ -44,7 +49,7 @@ app.use('/api/auth/', authLimiter);
 
 // Health check
 app.get('/', (req, res) => {
-    res.json({ message: 'ai-SocilaMind API is running', status: 'OK', ai: 'Local (Ollama)' });
+    res.json({ message: 'ai-SocilaMind API is running', status: 'OK', ai: 'Groq (' + (process.env.GROQ_MODEL || 'llama3-70b') + ')' });
 });
 app.get('/health', async (req, res) => {
     try {
@@ -55,7 +60,7 @@ app.get('/health', async (req, res) => {
             status: 'OK',
             timestamp: new Date().toISOString(),
             database: dbStatus[dbState] || 'unknown',
-            ai: 'Ollama (Mistral)',
+            ai: 'Groq (' + (process.env.GROQ_MODEL || 'llama3-70b') + ')',
             uptime: process.uptime()
         });
     } catch (err) {

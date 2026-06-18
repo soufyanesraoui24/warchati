@@ -5,7 +5,7 @@
  */
 
 const TemplateResponse = require('../models/TemplateResponse');
-const { generateLocalResponse } = require('./localAIService');
+const { generateGroqResponse } = require('./groqAIService');
 
 // ─── نظام الشخصية لـ "وردة" عند توليد الرد عبر AI ──────────────────────────
 const WARDA_SYSTEM_PROMPT = `أنت "وردة"، مساعدة مبيعات ذكية ومحترفة لمتجر إلكتروني جزائري.
@@ -57,7 +57,7 @@ async function generateReply(analysis, productContext, conversation) {
         console.error('[ReplyGenerator] Error fetching template:', error.message);
     }
 
-    // ── 2. توليد الرد عبر الذكاء الاصطناعي المحلي (Ollama) ──
+    // ── 2. توليد الرد عبر Groq AI ──
     try {
         const messages = [
             { role: 'system', content: WARDA_SYSTEM_PROMPT },
@@ -75,7 +75,7 @@ async function generateReply(analysis, productContext, conversation) {
             }
         ];
 
-        const aiText = await generateLocalResponse(messages);
+        const aiText = await generateGroqResponse(messages);
         if (aiText && aiText.length > 10) {
             return { text: aiText, source: 'ai' };
         }

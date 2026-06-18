@@ -10,14 +10,16 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      - key: NODE_ENV
+        value: production
       - key: JWT_SECRET
         generateValue: true
-      - key: OLLAMA_URL
-        value: http://localhost:11434
-      - key: OLLAMA_MODEL
-        value: qwen2.5:7b
-      - key: OLLAMA_TIMEOUT_MS
-        value: '30000'
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: llama3-70b-8192
+      - key: GROQ_TIMEOUT_MS
+        value: '15000'
       - key: FRONTEND_URL
         sync: false
       - key: GOOGLE_CLIENT_ID

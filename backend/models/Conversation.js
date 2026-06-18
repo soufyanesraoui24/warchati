@@ -10,4 +10,8 @@ const conversationSchema = new mongoose.Schema({
   welcomeSent: { type: Boolean, default: false },
 }, { timestamps: true });
 
+conversationSchema.index({ senderId: 1, platform: 1 });
+conversationSchema.index({ status: 1 });
+conversationSchema.index({ updatedAt: -1 });
+
 module.exports = mongoose.model('Conversation', conversationSchema);

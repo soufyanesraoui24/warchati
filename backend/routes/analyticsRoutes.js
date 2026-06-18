@@ -6,6 +6,8 @@ const {
     getTopIntents,
     getHandoffRate,
     getSentimentTrend,
+    getEmotionStats,
+    getEmotionTrend,
     getHourlyDistribution,
     getChannelBreakdown
 } = require('../controllers/analyticsController');
@@ -20,6 +22,8 @@ router.get('/messages-by-day', getMessagesByDay);
 router.get('/top-intents', getTopIntents);
 router.get('/handoff-rate', getHandoffRate);
 router.get('/sentiment-trend', getSentimentTrend);
+router.get('/emotion-stats', getEmotionStats);
+router.get('/emotion-trend', getEmotionTrend);
 router.get('/hourly-distribution', getHourlyDistribution);
 router.get('/channel-breakdown', getChannelBreakdown);
 

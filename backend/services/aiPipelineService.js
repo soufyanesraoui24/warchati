@@ -3,8 +3,8 @@ const Message = require('../models/Message');
 const TemplateResponse = require('../models/TemplateResponse');
 const Product = require('../models/Product');
 const BotSettings = require('../models/BotSettings');
-const { generateLocalResponse } = require('./localAIService');
-const { analyzeMessage } = require('./messageAnalyzer');
+const { generateGroqResponse } = require('./groqAIService');
+const { analyzeMessage, getEmotionResponse } = require('./messageAnalyzer');
 const { getIO } = require('../config/socket');
 
 const responseCache = new Map();
@@ -230,20 +230,34 @@ exports.processMessage = async (messageText, conversationId) => {
         return { text: null, intent: null, sentiment: null, skipped: true };
     }
 
-    const { intent, sentiment, keywords } = analyzeMessage(cleanedText);
+    const analysis = analyzeMessage(cleanedText);
+    const { intent, sentiment, emotion, emotionScore, emotions, needsHandoff, keywords } = analysis;
 
-    if (sentiment === 'negative') {
+    // ═══════════════════════════════════════════════
+    // EMOTION-BASED HANDOFF (anger, strong frustration, sarcasm)
+    // ═══════════════════════════════════════════════
+    if (needsHandoff) {
+        console.log(`[Emotion] Handoff triggered by "${emotion}" (score: ${emotionScore})`);
         await Conversation.findByIdAndUpdate(conversationId, { status: 'HANDOFF' });
         const io = getIO();
         if (io) {
-            io.to('monitor_room').emit('handoff_alert', { conversationId, intent, sentiment });
+            io.to('monitor_room').emit('handoff_alert', { conversationId, intent, sentiment, emotion });
         }
         return {
-            text: 'نعتذر منك على الإزعاج 🙏 راح نحولك للموظف باش يشوف الطلب تاعك ويساعدك أكثر.',
-            intent, sentiment
+            text: getEmotionResponse(emotion),
+            intent, sentiment, emotion, emotionScore, emotions, needsHandoff: true
         };
     }
 
+    if (sentiment === 'negative') {
+        console.log('[Emotion] Negative sentiment without handoff trigger');
+    }
+
+    const emotionPrefix = getEmotionResponse(emotion);
+
+    // ═══════════════════════════════════════════════
+    // WELCOME + GREETING
+    // ═══════════════════════════════════════════════
     let responseText = '';
     let isFirstMessage = false;
     if (!conversation.welcomeSent) {
@@ -252,31 +266,42 @@ exports.processMessage = async (messageText, conversationId) => {
         await Conversation.findByIdAndUpdate(conversationId, { welcomeSent: true });
     }
 
-    // If first message is a greeting → welcome only, skip template/AI
     if (isFirstMessage && intent === 'greeting') {
-        return { text: responseText, intent, sentiment };
+        return { text: responseText, intent, sentiment, emotion, emotionScore, emotions };
     }
 
+    // ═══════════════════════════════════════════════
+    // TEMPLATE MATCHING
+    // ═══════════════════════════════════════════════
     const templateText = await searchTemplates(cleanedText, intent, keywords);
     if (templateText) {
-        const finalText = responseText ? `${responseText}\n\n${templateText}` : templateText;
-        return { text: finalText, intent: templateText.includes('السعر') ? 'price_inquiry' : intent, sentiment };
+        let finalText = responseText ? `${responseText}\n\n${templateText}` : templateText;
+        if (emotionPrefix) finalText = `${emotionPrefix}\n\n${finalText}`;
+        return { text: finalText, intent: templateText.includes('السعر') ? 'price_inquiry' : intent, sentiment, emotion, emotionScore, emotions };
     }
 
+    // ═══════════════════════════════════════════════
+    // RESPONSE CACHE
+    // ═══════════════════════════════════════════════
     const cached = getCached(cleanedText);
     if (cached) {
         console.log('[Pipeline] Cache hit');
-        const finalText = responseText ? `${responseText}\n\n${cached}` : cached;
-        return { text: finalText, intent, sentiment };
+        let finalText = responseText ? `${responseText}\n\n${cached}` : cached;
+        if (emotionPrefix) finalText = `${emotionPrefix}\n\n${finalText}`;
+        return { text: finalText, intent, sentiment, emotion, emotionScore, emotions };
     }
 
+    // ═══════════════════════════════════════════════
+    // GROQ AI RESPONSE
+    // ═══════════════════════════════════════════════
     const productCtx = await getProductContext(keywords);
     const history = await getConversationHistory(conversationId);
 
     const systemPrompt = `You are "${botName}", a helpful Algerian store assistant.
 ${langInstruction}
 - Reply in 1-2 short sentences.
-- Be direct and helpful.`;
+- Be direct and helpful.
+- Customer emotion: ${emotion} (${(emotionScore * 100).toFixed(0)}%)`;
 
     const userContent = `سؤال: ${cleanedText}
 نية: ${intent}
@@ -288,25 +313,25 @@ ${productCtx || ''}`;
         { role: 'user', content: userContent }
     ];
 
-    console.log('[Pipeline] Sending to Ollama...');
-    const rawResponse = await generateLocalResponse(aiMessages);
+    console.log('[Pipeline] Sending to Groq...');
+    const rawResponse = await generateGroqResponse(aiMessages);
 
     if (rawResponse && rawResponse.length > 5) {
         const aiText = trimResponse(rawResponse);
         console.log(`[Pipeline] AI reply: "${aiText.substring(0, 60)}..."`);
 
         if (isValidResponse(aiText)) {
-            const finalText = responseText ? `${responseText}\n\n${aiText}` : aiText;
+            let finalText = responseText ? `${responseText}\n\n${aiText}` : aiText;
+            if (emotionPrefix) finalText = `${emotionPrefix}\n\n${finalText}`;
             setCached(cleanedText, aiText);
             const io = getIO();
             if (io) {
                 io.to('monitor_room').emit('new_ai_response', {
-                    conversationId, intent, sentiment, aiResponse: aiText
+                    conversationId, intent, sentiment, emotion, aiResponse: aiText
                 });
             }
-            return { text: finalText, intent, sentiment };
+            return { text: finalText, intent, sentiment, emotion, emotionScore, emotions };
         }
-
         console.log('[Pipeline] AI response invalid - handing off');
     }
 
@@ -314,13 +339,14 @@ ${productCtx || ''}`;
         await Conversation.findByIdAndUpdate(conversationId, { status: 'HANDOFF' });
         const io = getIO();
         if (io) {
-            io.to('monitor_room').emit('handoff_alert', { conversationId, intent, sentiment });
+            io.to('monitor_room').emit('handoff_alert', { conversationId, intent, sentiment, emotion });
         }
         return {
             text: `${responseText}\n\nنعتذر منك، راح نحولك للموظف باش يساعدك أكثر.`,
-            intent, sentiment
+            intent, sentiment, emotion, emotionScore, emotions, needsHandoff: true
         };
     }
 
-    return { text: fallbackMsg, intent: intent || 'unknown', sentiment };
+    const fallback = emotionPrefix ? `${emotionPrefix}\n\n${fallbackMsg}` : fallbackMsg;
+    return { text: fallback, intent: intent || 'unknown', sentiment, emotion, emotionScore, emotions };
 };
